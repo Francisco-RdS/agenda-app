@@ -28,7 +28,7 @@ export default function App() {
       const querySnapshot = await getDocs(collection(db, "agendamentos", dataSelecionada, "horarios"));
       const data = {};
       querySnapshot.forEach((doc) => {
-        data[doc.id] = doc.data();
+        data[doc.id] = doc.data().lista || [];
       });
       setAgendamentos(data);
     };
@@ -36,8 +36,7 @@ export default function App() {
   }, [dataSelecionada]);
 
   const abrirModal = (horario) => {
-    const agendamento = agendamentos[horario] || { animal: "", tutor: "", servico: [], profissional: "" };
-    setForm(agendamento);
+    setForm({ animal: "", tutor: "", servico: [], profissional: "" });
     setModalInfo({ visible: true, horario });
   };
 
@@ -48,18 +47,26 @@ export default function App() {
 
   const salvar = async () => {
     const horario = modalInfo.horario;
-    await setDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario), form);
-    setAgendamentos({ ...agendamentos, [horario]: { ...form } });
+    const agendamentosHora = agendamentos[horario] || [];
+    const novos = [...agendamentosHora, form];
+    await setDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario), { lista: novos });
+    setAgendamentos({ ...agendamentos, [horario]: novos });
     fecharModal();
   };
 
-  const excluir = async () => {
+  const excluir = async (index) => {
     const horario = modalInfo.horario;
-    await deleteDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario));
-    const novos = { ...agendamentos };
-    delete novos[horario];
-    setAgendamentos(novos);
-    fecharModal();
+    const novaLista = [...(agendamentos[horario] || [])];
+    novaLista.splice(index, 1);
+    if (novaLista.length === 0) {
+      await deleteDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario));
+      const novos = { ...agendamentos };
+      delete novos[horario];
+      setAgendamentos(novos);
+    } else {
+      await setDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario), { lista: novaLista });
+      setAgendamentos({ ...agendamentos, [horario]: novaLista });
+    }
   };
 
   const toggleServico = (servico) => {
@@ -74,18 +81,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      <header className="bg-blue-600 text-white p-4 shadow rounded mb-6">
-        <h1 className="text-2xl font-bold">📅 Agenda de Serviços</h1>
-      </header>
+      <h1 className="text-2xl font-bold mb-4">Agenda</h1>
 
-      <div className="mb-4 flex items-center gap-2 justify-center">
+      {/* Navegação de datas */}
+      <div className="mb-4 flex items-center gap-2">
         <button
           onClick={() =>
             setDataSelecionada(
               new Date(new Date(dataSelecionada).getTime() - 86400000).toISOString().split("T")[0]
             )
           }
-          className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded"
+          className="px-2 py-1 bg-gray-200 rounded"
         >
           ◀ Dia anterior
         </button>
@@ -93,7 +99,7 @@ export default function App() {
           type="date"
           value={dataSelecionada}
           onChange={(e) => setDataSelecionada(e.target.value)}
-          className="border rounded px-3 py-1"
+          className="border rounded px-2 py-1"
         />
         <button
           onClick={() =>
@@ -101,38 +107,48 @@ export default function App() {
               new Date(new Date(dataSelecionada).getTime() + 86400000).toISOString().split("T")[0]
             )
           }
-          className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded"
+          className="px-2 py-1 bg-gray-200 rounded"
         >
           Próximo dia ▶
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {horarios.map((hora) => (
-          <div
-            key={hora}
-            onClick={() => abrirModal(hora)}
-            className={`p-4 rounded-xl shadow cursor-pointer transition-transform duration-200 hover:scale-[1.02] ${
-              agendamentos[hora] ? "bg-green-200 border border-green-400" : "bg-white border border-gray-300"
-            }`}
-          >
-            <strong className="block text-lg mb-1">{hora}</strong>
-            {agendamentos[hora] && (
-              <div className="text-sm text-gray-800 space-y-1">
-                <div>🐶 {agendamentos[hora].animal}</div>
-                <div>👤 {agendamentos[hora].tutor}</div>
-                <div>🛁 {Array.isArray(agendamentos[hora].servico) ? agendamentos[hora].servico.join(", ") : agendamentos[hora].servico}</div>
-                <div>💇 {agendamentos[hora].profissional}</div>
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        {horarios.map((hora) => {
+          const agendamentosHora = agendamentos[hora] || [];
+          let bgColor = "bg-white";
+          if (agendamentosHora.length === 1) bgColor = "bg-green-200";
+          else if (agendamentosHora.length === 2) bgColor = "bg-yellow-200";
+          else if (agendamentosHora.length === 3) bgColor = "bg-orange-300";
+          else if (agendamentosHora.length >= 4) bgColor = "bg-red-300";
+
+          return (
+            <div
+              key={hora}
+              onClick={() => abrirModal(hora)}
+              className={`p-4 rounded-lg shadow cursor-pointer ${bgColor}`}
+            >
+              <strong>{hora}</strong>
+              {agendamentosHora.length > 0 && (
+                <div className="text-sm mt-1 space-y-1">
+                  {agendamentosHora.map((ag, idx) => (
+                    <div key={idx}>
+                      <div>🐾 {ag.animal} - {ag.tutor}</div>
+                      <div>🛁 {ag.servico.join(", ")}</div>
+                      <div>👤 {ag.profissional}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {modalInfo.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Agendar {modalInfo.horario}</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h2 className="text-xl mb-4">Agendar {modalInfo.horario}</h2>
             <input
               className="w-full mb-2 p-2 border rounded"
               placeholder="Nome do animal"
@@ -146,7 +162,7 @@ export default function App() {
               onChange={(e) => setForm({ ...form, tutor: e.target.value })}
             />
             <div className="mb-2">
-              <label className="block mb-1 font-medium">Serviços:</label>
+              <label className="block mb-1">Serviços:</label>
               <div className="flex flex-wrap gap-2">
                 {servicosDisponiveis.map((s) => (
                   <label key={s} className="flex items-center gap-1 text-sm">
@@ -173,16 +189,31 @@ export default function App() {
               ))}
             </select>
             <div className="flex justify-between">
-              <button onClick={salvar} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
-                💾 Salvar
+              <button onClick={salvar} className="bg-blue-500 text-white px-4 py-2 rounded">
+                Salvar
               </button>
-              <button onClick={excluir} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
-                🗑️ Excluir
-              </button>
-              <button onClick={fecharModal} className="text-gray-600 hover:underline px-2">
+              <button onClick={fecharModal} className="text-gray-600 px-4 py-2">
                 Cancelar
               </button>
             </div>
+
+            {/* Excluir individual */}
+            {agendamentos[modalInfo.horario]?.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-bold mb-2">Agendamentos existentes:</h3>
+                {agendamentos[modalInfo.horario].map((ag, idx) => (
+                  <div key={idx} className="text-sm mb-2 border-b pb-1">
+                    {ag.animal} - {ag.profissional} - {ag.servico.join(", ")}
+                    <button
+                      onClick={() => excluir(idx)}
+                      className="ml-2 text-red-500 text-xs"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
