@@ -20,7 +20,7 @@ export default function App() {
   const [agendamentos, setAgendamentos] = useState({});
   const [modalInfo, setModalInfo] = useState({ visible: false, horario: "" });
   const [form, setForm] = useState({ animal: "", tutor: "", servico: [], profissional: "" });
-  const profissionais = ["Maria", "João", "Carlos"];
+  const profissionais = ["Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene", "Franciso", "Raimundo", "Vera"];
   const servicosDisponiveis = ["Banho", "Tosa", "Tosa Higienica", "Hidratação", "Remoção"];
 
   useEffect(() => {
