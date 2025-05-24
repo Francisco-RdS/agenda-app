@@ -28,6 +28,7 @@ export default function App() {
     servico: [],
     profissional: "",
   });
+  const [animalSelecionadoIndex, setAnimalSelecionadoIndex] = useState(null);
   const profissionais = [
     "Silvia",
     "Taty",
@@ -75,42 +76,75 @@ export default function App() {
     fetchAgendamentos();
   }, [dataSelecionada]);
 
+  // Quando abre modal, se tem animais no horário, seleciona o primeiro por padrão
   const abrirModal = (horario) => {
-    // Abre modal com formulário vazio para novo animal
-    setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+    const animaisNoHorario = agendamentos[horario]?.animais || [];
+    if (animaisNoHorario.length > 0) {
+      setAnimalSelecionadoIndex(0);
+      setForm(animaisNoHorario[0]);
+    } else {
+      setAnimalSelecionadoIndex(null);
+      setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+    }
     setModalInfo({ visible: true, horario });
   };
 
   const fecharModal = () => {
     setModalInfo({ visible: false, horario: "" });
     setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+    setAnimalSelecionadoIndex(null);
   };
 
+  // Salvar ou editar agendamento individual
   const salvar = async () => {
     const horario = modalInfo.horario;
     const ref = doc(db, "agendamentos", dataSelecionada, "horarios", horario);
     const snap = await getDoc(ref);
     let existentes = [];
-
     if (snap.exists()) {
       existentes = snap.data().animais || [];
     }
 
-    // Adiciona o novo animal ao array, pode ter múltiplos animais por horário
-    const novosAnimais = [...existentes, form];
-    await setDoc(ref, { animais: novosAnimais });
+    if (animalSelecionadoIndex !== null) {
+      // Edita o animal selecionado
+      existentes[animalSelecionadoIndex] = form;
+    } else {
+      // Novo animal
+      existentes.push(form);
+    }
 
-    setAgendamentos({ ...agendamentos, [horario]: { animais: novosAnimais } });
+    await setDoc(ref, { animais: existentes });
+    setAgendamentos({ ...agendamentos, [horario]: { animais: existentes } });
     fecharModal();
   };
 
-  const excluir = async () => {
+  // Excluir agendamento individual
+  const excluirAnimal = async () => {
     const horario = modalInfo.horario;
-    // Para excluir, vamos remover todos animais desse horário (simplificando)
-    await deleteDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario));
-    const novos = { ...agendamentos };
-    delete novos[horario];
-    setAgendamentos(novos);
+    const ref = doc(db, "agendamentos", dataSelecionada, "horarios", horario);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      fecharModal();
+      return;
+    }
+    const existentes = snap.data().animais || [];
+    if (animalSelecionadoIndex === null) {
+      fecharModal();
+      return;
+    }
+
+    existentes.splice(animalSelecionadoIndex, 1); // remove animal selecionado
+
+    if (existentes.length === 0) {
+      // Se não tem mais animais no horário, remove o documento inteiro
+      await deleteDoc(ref);
+      const novos = { ...agendamentos };
+      delete novos[horario];
+      setAgendamentos(novos);
+    } else {
+      await setDoc(ref, { animais: existentes });
+      setAgendamentos({ ...agendamentos, [horario]: { animais: existentes } });
+    }
     fecharModal();
   };
 
@@ -124,6 +158,13 @@ export default function App() {
           : [...prev.servico, servico],
       };
     });
+  };
+
+  // Ao escolher animal diferente no dropdown do modal
+  const selecionarAnimal = (index) => {
+    setAnimalSelecionadoIndex(index);
+    const animal = agendamentos[modalInfo.horario].animais[index];
+    setForm(animal);
   };
 
   return (
@@ -207,6 +248,31 @@ export default function App() {
         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-96 max-h-[90vh] overflow-auto">
             <h2 className="text-xl mb-4">Agendar {modalInfo.horario}</h2>
+
+            {/* Dropdown para escolher animal existente */}
+            {agendamentos[modalInfo.horario]?.animais?.length > 0 && (
+              <select
+                className="w-full mb-4 p-2 border rounded"
+                value={animalSelecionadoIndex ?? ""}
+                onChange={(e) => {
+                  const idx = e.target.value === "" ? null : Number(e.target.value);
+                  if (idx === null) {
+                    setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+                    setAnimalSelecionadoIndex(null);
+                  } else {
+                    selecionarAnimal(idx);
+                  }
+                }}
+              >
+                <option value="">Novo animal</option>
+                {agendamentos[modalInfo.horario].animais.map((a, i) => (
+                  <option key={i} value={i}>
+                    {a.animal} - {a.profissional}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               className="w-full mb-2 p-2 border rounded"
               placeholder="Nome do animal"
@@ -253,12 +319,14 @@ export default function App() {
               >
                 Salvar
               </button>
-              <button
-                onClick={excluir}
-                className="bg-red-500 text-white px-4 py-2 rounded"
-              >
-                Excluir horário
-              </button>
+              {animalSelecionadoIndex !== null && (
+                <button
+                  onClick={excluirAnimal}
+                  className="bg-red-500 text-white px-4 py-2 rounded"
+                >
+                  Excluir agendamento
+                </button>
+              )}
               <button onClick={fecharModal} className="text-gray-600 px-4 py-2">
                 Cancelar
               </button>
