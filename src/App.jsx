@@ -49,36 +49,37 @@ export default function App() {
   ];
 
   useEffect(() => {
-    const fetchData = async () => {
-      // Buscar agendamentos do dia
-      const horariosSnapshot = await getDocs(
+    const fetchDados = async () => {
+      // Buscar agendamentos
+      const querySnapshot = await getDocs(
         collection(db, "agendamentos", dataSelecionada, "horarios")
       );
       const data = {};
-      horariosSnapshot.forEach((doc) => {
+      querySnapshot.forEach((doc) => {
         data[doc.id] = doc.data();
       });
       setAgendamentos(data);
 
-      // Buscar anotação do dia
-      const anotacaoDoc = await getDoc(doc(db, "anotacoes", dataSelecionada));
-      if (anotacaoDoc.exists()) {
-        setAnotacoes(anotacaoDoc.data().texto);
+      // Buscar anotações
+      const docSnap = await getDoc(doc(db, "anotacoes", dataSelecionada));
+      if (docSnap.exists()) {
+        setAnotacoes(docSnap.data().texto);
       } else {
         setAnotacoes("");
       }
     };
 
-    fetchData();
+    fetchDados();
   }, [dataSelecionada]);
 
   const abrirModal = (horario) => {
-    const agendamento = agendamentos[horario] || {
-      animal: "",
-      tutor: "",
-      servico: [],
-      profissional: "",
-    };
+    const agendamento =
+      agendamentos[horario] || {
+        animal: "",
+        tutor: "",
+        servico: [],
+        profissional: "",
+      };
     setForm(agendamento);
     setModalInfo({ visible: true, horario });
   };
@@ -116,10 +117,13 @@ export default function App() {
     });
   };
 
-  // Função para salvar as anotações
   const salvarAnotacoes = async () => {
-    await setDoc(doc(db, "anotacoes", dataSelecionada), { texto: anotacoes });
-    alert("Anotações salvas!");
+    try {
+      await setDoc(doc(db, "anotacoes", dataSelecionada), { texto: anotacoes });
+      alert("Anotações salvas com sucesso!");
+    } catch (error) {
+      alert("Erro ao salvar anotações: " + error.message);
+    }
   };
 
   return (
@@ -187,23 +191,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* Campo de Anotações */}
-      <div className="mt-10 p-4 bg-white rounded shadow">
-        <h2 className="text-lg font-bold mb-2">Anotações do dia</h2>
-        <textarea
-          className="w-full h-32 p-2 border rounded"
-          placeholder="Escreva aqui suas observações, entregas, profissionais de folga..."
-          value={anotacoes}
-          onChange={(e) => setAnotacoes(e.target.value)}
-        />
-        <button
-          onClick={salvarAnotacoes}
-          className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Salvar Anotações
-        </button>
-      </div>
-
       {/* Modal */}
       {modalInfo.visible && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
@@ -261,16 +248,31 @@ export default function App() {
               >
                 Excluir
               </button>
-              <button
-                onClick={fecharModal}
-                className="bg-gray-300 px-4 py-2 rounded"
-              >
+              <button onClick={fecharModal} className="text-gray-600">
                 Cancelar
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Campo de anotações */}
+      <div className="mt-6 p-4 bg-white rounded shadow">
+        <h2 className="text-xl font-semibold mb-2">Anotações do dia</h2>
+        <textarea
+          className="w-full p-2 border rounded"
+          rows={4}
+          placeholder="Escreva suas anotações aqui..."
+          value={anotacoes}
+          onChange={(e) => setAnotacoes(e.target.value)}
+        />
+        <button
+          onClick={salvarAnotacoes}
+          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Salvar anotações
+        </button>
+      </div>
     </div>
   );
 }
