@@ -1,3 +1,4 @@
+// firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
@@ -12,8 +13,8 @@ const firebaseConfig = {
   measurementId: "G-PP4ZTTSCHK",
 };
 
-// Inicializa o Firebase e o Firestore
+// Inicializa o app Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
-export { db };
+// Inicializa o Firestore
+export const db = getFirestore(app);
