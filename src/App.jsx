@@ -17,63 +17,134 @@ const horarios = Array.from({ length: 19 }, (_, i) => {
 });
 
 export default function App() {
-  const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split("T")[0]);
+  const [dataSelecionada, setDataSelecionada] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [agendamentos, setAgendamentos] = useState({});
   const [modalInfo, setModalInfo] = useState({ visible: false, horario: "" });
-  const [form, setForm] = useState({ animal: "", tutor: "", servico: [], profissional: "" });
-  const [anotacoes, setAnotacoes] = useState({ observacoes: "", entregas: "", folgas: "" });
+  const [form, setForm] = useState({
+    animal: "",
+    tutor: "",
+    servico: [],
+    profissional: "",
+  });
+  const [animalSelecionadoIndex, setAnimalSelecionadoIndex] = useState(null);
+  const profissionais = [
+    "Silvia",
+    "Taty",
+    "Italo",
+    "Marcelo",
+    "Marcos",
+    "Eliene",
+    "Francisco",
+    "Raimundo",
+    "Vera",
+  ];
+  const servicosDisponiveis = [
+    "Banho",
+    "Tosa",
+    "Tosa Higienica",
+    "Hidratação",
+    "Remoção",
+  ];
 
-  const profissionais = ["Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene", "Francisco", "Raimundo", "Vera"];
-  const servicosDisponiveis = ["Banho", "Tosa", "Tosa Higienica", "Hidratação", "Remoção"];
+  const cores = [
+    "#e63946",
+    "#457b9d",
+    "#2a9d8f",
+    "#f4a261",
+    "#b5838d",
+    "#6d6875",
+    "#118ab2",
+    "#06d6a0",
+    "#ef476f",
+  ];
+
+  const colorByIndex = (i) => cores[i % cores.length];
 
   useEffect(() => {
     const fetchAgendamentos = async () => {
-      const querySnapshot = await getDocs(collection(db, "agendamentos", dataSelecionada, "horarios"));
+      const querySnapshot = await getDocs(
+        collection(db, "agendamentos", dataSelecionada, "horarios")
+      );
       const data = {};
       querySnapshot.forEach((doc) => {
         data[doc.id] = doc.data();
       });
       setAgendamentos(data);
     };
-
-    const fetchAnotacoes = async () => {
-      const docRef = doc(db, "anotacoes", dataSelecionada);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setAnotacoes(docSnap.data());
-      } else {
-        setAnotacoes({ observacoes: "", entregas: "", folgas: "" });
-      }
-    };
-
     fetchAgendamentos();
-    fetchAnotacoes();
   }, [dataSelecionada]);
 
+  // Quando abre modal, se tem animais no horário, seleciona o primeiro por padrão
   const abrirModal = (horario) => {
-    const agendamento = agendamentos[horario] || { animal: "", tutor: "", servico: [], profissional: "" };
-    setForm(agendamento);
+    const animaisNoHorario = agendamentos[horario]?.animais || [];
+    if (animaisNoHorario.length > 0) {
+      setAnimalSelecionadoIndex(0);
+      setForm(animaisNoHorario[0]);
+    } else {
+      setAnimalSelecionadoIndex(null);
+      setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+    }
     setModalInfo({ visible: true, horario });
   };
 
   const fecharModal = () => {
     setModalInfo({ visible: false, horario: "" });
     setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+    setAnimalSelecionadoIndex(null);
   };
 
+  // Salvar ou editar agendamento individual
   const salvar = async () => {
     const horario = modalInfo.horario;
-    await setDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario), form);
-    setAgendamentos({ ...agendamentos, [horario]: { ...form } });
+    const ref = doc(db, "agendamentos", dataSelecionada, "horarios", horario);
+    const snap = await getDoc(ref);
+    let existentes = [];
+    if (snap.exists()) {
+      existentes = snap.data().animais || [];
+    }
+
+    if (animalSelecionadoIndex !== null) {
+      // Edita o animal selecionado
+      existentes[animalSelecionadoIndex] = form;
+    } else {
+      // Novo animal
+      existentes.push(form);
+    }
+
+    await setDoc(ref, { animais: existentes });
+    setAgendamentos({ ...agendamentos, [horario]: { animais: existentes } });
     fecharModal();
   };
 
-  const excluir = async () => {
+  // Excluir agendamento individual
+  const excluirAnimal = async () => {
     const horario = modalInfo.horario;
-    await deleteDoc(doc(db, "agendamentos", dataSelecionada, "horarios", horario));
-    const novos = { ...agendamentos };
-    delete novos[horario];
-    setAgendamentos(novos);
+    const ref = doc(db, "agendamentos", dataSelecionada, "horarios", horario);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      fecharModal();
+      return;
+    }
+    const existentes = snap.data().animais || [];
+    if (animalSelecionadoIndex === null) {
+      fecharModal();
+      return;
+    }
+
+    existentes.splice(animalSelecionadoIndex, 1); // remove animal selecionado
+
+    if (existentes.length === 0) {
+      // Se não tem mais animais no horário, remove o documento inteiro
+      await deleteDoc(ref);
+      const novos = { ...agendamentos };
+      delete novos[horario];
+      setAgendamentos(novos);
+    } else {
+      await setDoc(ref, { animais: existentes });
+      setAgendamentos({ ...agendamentos, [horario]: { animais: existentes } });
+    }
     fecharModal();
   };
 
@@ -82,14 +153,18 @@ export default function App() {
       const existe = prev.servico.includes(servico);
       return {
         ...prev,
-        servico: existe ? prev.servico.filter((s) => s !== servico) : [...prev.servico, servico],
+        servico: existe
+          ? prev.servico.filter((s) => s !== servico)
+          : [...prev.servico, servico],
       };
     });
   };
 
-  const salvarAnotacoes = async () => {
-    await setDoc(doc(db, "anotacoes", dataSelecionada), anotacoes);
-    alert("Anotações salvas!");
+  // Ao escolher animal diferente no dropdown do modal
+  const selecionarAnimal = (index) => {
+    setAnimalSelecionadoIndex(index);
+    const animal = agendamentos[modalInfo.horario].animais[index];
+    setForm(animal);
   };
 
   return (
@@ -101,7 +176,9 @@ export default function App() {
         <button
           onClick={() =>
             setDataSelecionada(
-              new Date(new Date(dataSelecionada).getTime() - 86400000).toISOString().split("T")[0]
+              new Date(new Date(dataSelecionada).getTime() - 86400000)
+                .toISOString()
+                .split("T")[0]
             )
           }
           className="px-2 py-1 bg-gray-200 rounded"
@@ -117,7 +194,9 @@ export default function App() {
         <button
           onClick={() =>
             setDataSelecionada(
-              new Date(new Date(dataSelecionada).getTime() + 86400000).toISOString().split("T")[0]
+              new Date(new Date(dataSelecionada).getTime() + 86400000)
+                .toISOString()
+                .split("T")[0]
             )
           }
           className="px-2 py-1 bg-gray-200 rounded"
@@ -126,36 +205,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* Bloco de anotações */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h2 className="text-lg font-semibold mb-2">Anotações do dia</h2>
-        <textarea
-          className="w-full p-2 border rounded mb-2"
-          placeholder="Observações gerais..."
-          rows={2}
-          value={anotacoes.observacoes}
-          onChange={(e) => setAnotacoes({ ...anotacoes, observacoes: e.target.value })}
-        />
-        <textarea
-          className="w-full p-2 border rounded mb-2"
-          placeholder="Entregas..."
-          rows={2}
-          value={anotacoes.entregas}
-          onChange={(e) => setAnotacoes({ ...anotacoes, entregas: e.target.value })}
-        />
-        <textarea
-          className="w-full p-2 border rounded mb-2"
-          placeholder="Profissionais de folga..."
-          rows={2}
-          value={anotacoes.folgas}
-          onChange={(e) => setAnotacoes({ ...anotacoes, folgas: e.target.value })}
-        />
-        <button onClick={salvarAnotacoes} className="bg-blue-500 text-white px-4 py-2 rounded">
-          Salvar Anotações
-        </button>
-      </div>
-
-      {/* Grade de horários */}
+      {/* Grade dos horários */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
         {horarios.map((hora) => (
           <div
@@ -166,19 +216,29 @@ export default function App() {
             }`}
           >
             <strong>{hora}</strong>
-            {agendamentos[hora] && (
-              <div className="text-sm mt-1">
-                <div>Animal: {agendamentos[hora].animal}</div>
-                <div>Tutor: {agendamentos[hora].tutor}</div>
-                <div>
-                  Serviços:{" "}
-                  {Array.isArray(agendamentos[hora].servico)
-                    ? agendamentos[hora].servico.join(", ")
-                    : agendamentos[hora].servico}
+
+            {agendamentos[hora]?.animais?.map((a, index) => (
+              <div
+                key={index}
+                className="text-sm mt-2 p-2 rounded border bg-white"
+              >
+                <div className="font-semibold text-gray-700">
+                  🐾 {a.animal} - {a.profissional}
                 </div>
-                <div>Profissional: {agendamentos[hora].profissional}</div>
+                <div className="text-xs text-gray-500">Tutor: {a.tutor}</div>
+                <div className="flex flex-wrap mt-1 gap-1">
+                  {a.servico.map((s, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-1 rounded text-white text-xs"
+                      style={{ backgroundColor: colorByIndex(index + i * 3) }}
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
               </div>
-            )}
+            ))}
           </div>
         ))}
       </div>
@@ -186,8 +246,33 @@ export default function App() {
       {/* Modal de agendamento */}
       {modalInfo.visible && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded shadow-lg w-96">
+          <div className="bg-white p-6 rounded shadow-lg w-96 max-h-[90vh] overflow-auto">
             <h2 className="text-xl mb-4">Agendar {modalInfo.horario}</h2>
+
+            {/* Dropdown para escolher animal existente */}
+            {agendamentos[modalInfo.horario]?.animais?.length > 0 && (
+              <select
+                className="w-full mb-4 p-2 border rounded"
+                value={animalSelecionadoIndex ?? ""}
+                onChange={(e) => {
+                  const idx = e.target.value === "" ? null : Number(e.target.value);
+                  if (idx === null) {
+                    setForm({ animal: "", tutor: "", servico: [], profissional: "" });
+                    setAnimalSelecionadoIndex(null);
+                  } else {
+                    selecionarAnimal(idx);
+                  }
+                }}
+              >
+                <option value="">Novo animal</option>
+                {agendamentos[modalInfo.horario].animais.map((a, i) => (
+                  <option key={i} value={i}>
+                    {a.animal} - {a.profissional}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               className="w-full mb-2 p-2 border rounded"
               placeholder="Nome do animal"
@@ -202,7 +287,7 @@ export default function App() {
             />
             <div className="mb-2">
               <label className="block mb-1">Serviços:</label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 max-h-28 overflow-auto">
                 {servicosDisponiveis.map((s) => (
                   <label key={s} className="flex items-center gap-1 text-sm">
                     <input
@@ -228,13 +313,21 @@ export default function App() {
               ))}
             </select>
             <div className="flex justify-between">
-              <button onClick={salvar} className="bg-blue-500 text-white px-4 py-2 rounded">
+              <button
+                onClick={salvar}
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+              >
                 Salvar
               </button>
-              <button onClick={excluir} className="bg-red-500 text-white px-4 py-2 rounded">
-                Excluir
-              </button>
-              <button onClick={fecharModal} className="text-gray-600">
+              {animalSelecionadoIndex !== null && (
+                <button
+                  onClick={excluirAnimal}
+                  className="bg-red-500 text-white px-4 py-2 rounded"
+                >
+                  Excluir agendamento
+                </button>
+              )}
+              <button onClick={fecharModal} className="text-gray-600 px-4 py-2">
                 Cancelar
               </button>
             </div>
