@@ -29,6 +29,16 @@ export default function App() {
     profissional: "",
   });
   const [animalSelecionadoIndex, setAnimalSelecionadoIndex] = useState(null);
+
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [anotacaoTexto, setAnotacaoTexto] = useState("");
+  const [anotacaoHoje, setAnotacaoHoje] = useState("");
+  const [anotacaoAmanha, setAnotacaoAmanha] = useState("");
+  const [editandoAnotacao, setEditandoAnotacao] = useState(false);
+  const [textoEditado, setTextoEditado] = useState("");
+
+
+
   const profissionais = [
     "Silvia",
     "Taty",
@@ -62,6 +72,57 @@ export default function App() {
 
   const colorByIndex = (i) => cores[i % cores.length];
 
+  const salvarAnotacao = async () => {
+  const hoje = dataSelecionada;
+  const amanha = new Date(new Date(hoje).getTime() + 86400000)
+    .toISOString()
+    .split("T")[0];
+
+  // Salvar anotação somente se não houver para hoje
+  const docHojeSnap = await getDoc(doc(db, "anotacoes", hoje));
+  if (!docHojeSnap.exists()) {
+    await setDoc(doc(db, "anotacoes", hoje), { texto: anotacaoTexto });
+    setAnotacaoHoje(anotacaoTexto);
+  }
+
+  // Salvar no dia seguinte apenas se ainda não existe
+  const docAmanhaSnap = await getDoc(doc(db, "anotacoes", amanha));
+  if (!docAmanhaSnap.exists()) {
+    await setDoc(doc(db, "anotacoes", amanha), { texto: anotacaoTexto });
+    setAnotacaoAmanha(anotacaoTexto);
+  }
+
+  setAnotacaoTexto(""); // limpa o campo de digitação
+  setMenuAberto(false);
+};
+
+
+
+
+  // Função para carregar anotação do dia seguinte para o indicador
+ useEffect(() => {
+  const carregarAnotacoes = async () => {
+    const hoje = dataSelecionada;
+    const amanha = new Date(new Date(hoje).getTime() + 86400000)
+      .toISOString()
+      .split("T")[0];
+
+    // Carrega anotação do dia atual
+    const docHoje = await getDoc(doc(db, "anotacoes", hoje));
+    setAnotacaoHoje(docHoje.exists() ? docHoje.data().texto : "");
+
+    // Carrega anotação do dia seguinte
+    const docAmanha = await getDoc(doc(db, "anotacoes", amanha));
+    setAnotacaoAmanha(docAmanha.exists() ? docAmanha.data().texto : "");
+  };
+
+  carregarAnotacoes();
+}, [dataSelecionada]);
+
+
+
+
+  // Seu useEffect existente para carregar agendamentos
   useEffect(() => {
     const fetchAgendamentos = async () => {
       const querySnapshot = await getDocs(
@@ -75,6 +136,7 @@ export default function App() {
     };
     fetchAgendamentos();
   }, [dataSelecionada]);
+
 
   // Quando abre modal, se tem animais no horário, seleciona o primeiro por padrão
   const abrirModal = (horario) => {
@@ -169,10 +231,120 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      <h1 className="text-2xl font-bold mb-4">Agenda</h1>
+      <div className="flex justify-between items-center mb-4">
+  <h1 className="text-2xl font-bold">Agenda</h1>
+  <div className="relative">
+    <button
+      onClick={() => setMenuAberto(!menuAberto)}
+      className="text-3xl p-2"
+    >
+      ☰
+    </button>
+    {anotacaoAmanha && (
+  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1">
+    🔔
+  </span>
+)}
+
+  </div>
+</div>
+
+{menuAberto && (
+  <div className="fixed top-0 right-0 w-80 h-full bg-white shadow-lg z-50 p-4 overflow-y-auto">
+    <h2 className="text-xl font-semibold mb-4">Anotações</h2>
+
+    {/* BLOCO DA ANOTAÇÃO DE HOJE */}
+    {anotacaoHoje && !editandoAnotacao ? (
+      <div
+        onClick={() => {
+          setEditandoAnotacao(true);
+          setTextoEditado(anotacaoHoje);
+        }}
+        className="bg-green-100 p-3 rounded mb-4 cursor-pointer hover:bg-green-200 transition"
+      >
+        <strong>Anotação de hoje:</strong>
+        <p className="text-sm mt-2">{anotacaoHoje}</p>
+        <p className="text-xs text-gray-500 mt-1">(Clique para editar)</p>
+      </div>
+    ) : null}
+
+    {/* MODO EDIÇÃO */}
+    {editandoAnotacao && (
+      <div className="bg-green-100 p-3 rounded mb-4">
+        <strong>Editando anotação de hoje:</strong>
+        <textarea
+          className="w-full border rounded p-2 mt-2"
+          rows="3"
+          value={textoEditado}
+          onChange={(e) => setTextoEditado(e.target.value)}
+        />
+        <div className="flex justify-end mt-2 gap-2">
+          <button
+            onClick={async () => {
+              await setDoc(doc(db, "anotacoes", dataSelecionada), {
+                texto: textoEditado,
+              });
+              setAnotacaoHoje(textoEditado);
+              setEditandoAnotacao(false);
+            }}
+            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
+          >
+            Salvar edição
+          </button>
+          <button
+            onClick={async () => {
+              await deleteDoc(doc(db, "anotacoes", dataSelecionada));
+              setAnotacaoHoje(null);
+              setEditandoAnotacao(false);
+            }}
+            className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* CAMPO DE NOVA ANOTAÇÃO */}
+    <textarea
+      className="w-full border rounded p-2 mb-4"
+      rows="4"
+      placeholder="Escreva nova anotação para hoje..."
+      value={anotacaoTexto}
+      onChange={(e) => setAnotacaoTexto(e.target.value)}
+    />
+    <button
+      onClick={salvarAnotacao}
+      className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 w-full"
+    >
+      Salvar nova anotação
+    </button>
+
+    {/* ANOTAÇÃO DE AMANHÃ */}
+    {anotacaoAmanha && (
+      <div className="bg-yellow-100 p-3 rounded mt-6">
+        <strong>Anotações para o próximo dia:</strong>
+        <p className="text-sm mt-2">{anotacaoAmanha}</p>
+      </div>
+    )}
+
+    {/* BOTÃO DE FECHAR */}
+    <button
+      onClick={() => {
+        setMenuAberto(false);
+        setEditandoAnotacao(false);
+      }}
+      className="absolute top-2 right-2 text-gray-600 hover:text-black text-xl"
+    >
+      ×
+    </button>
+  </div>
+)}
 
       {/* Navegação de datas */}
       <div className="mb-4 flex items-center gap-2">
+    
+
         <button
           onClick={() =>
             setDataSelecionada(
