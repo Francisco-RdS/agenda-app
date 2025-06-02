@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import "./index.css";
 import { db } from "./firebase";
+import { v4 as uuidv4 } from "uuid";
+import { arrayUnion } from "firebase/firestore";
 import {
   collection,
   getDocs,
@@ -35,7 +37,10 @@ export default function App() {
   const [anotacaoHoje, setAnotacaoHoje] = useState("");
   const [anotacaoAmanha, setAnotacaoAmanha] = useState("");
   const [editandoAnotacao, setEditandoAnotacao] = useState(false);
+  const [anotacoes, setAnotacoes] = useState([]);
+  const [editandoId, setEditandoId] = useState(null);
   const [textoEditado, setTextoEditado] = useState("");
+
 
   const profissionais = [
     "Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene",
@@ -52,26 +57,53 @@ export default function App() {
   const colorByIndex = (i) => cores[i % cores.length];
 
   const salvarAnotacao = async () => {
-    const hoje = dataSelecionada;
-    const amanha = new Date(new Date(hoje).getTime() + 86400000)
-      .toISOString()
-      .split("T")[0];
+  const hoje = dataSelecionada;
 
-    const docHojeSnap = await getDoc(doc(db, "anotacoes", hoje));
-    if (!docHojeSnap.exists()) {
-      await setDoc(doc(db, "anotacoes", hoje), { texto: anotacaoTexto });
-      setAnotacaoHoje(anotacaoTexto);
-    }
-
-    const docAmanhaSnap = await getDoc(doc(db, "anotacoes", amanha));
-    if (!docAmanhaSnap.exists()) {
-      await setDoc(doc(db, "anotacoes", amanha), { texto: anotacaoTexto });
-      setAnotacaoAmanha(anotacaoTexto);
-    }
-
-    setAnotacaoTexto("");
-    setMenuAberto(false);
+  const novaAnotacao = {
+    id: uuidv4(),
+    texto: anotacaoTexto,
   };
+
+  await setDoc(
+    doc(db, "anotacoes", hoje),
+    {
+      anotacoes: arrayUnion(novaAnotacao),
+    },
+    { merge: true }
+  );
+
+  setAnotacaoTexto("");
+
+  // 👇 NOVA função (adicione logo abaixo da de cima, ainda dentro do seu componente App)
+  /*const excluirAnotacaoAmanha = async () => {
+  const dataAmanha = new Date(dataSelecionada);
+  dataAmanha.setDate(dataAmanha.getDate() + 1);
+  const dataFormatada = dataAmanha.toISOString().split("T")[0];
+
+  await deleteDoc(doc(db, "anotacoes", dataFormatada));
+  setAnotacaoAmanha(null);
+}; */
+
+  const docAtualizado = await getDoc(doc(db, "anotacoes", hoje));
+  if (docAtualizado.exists()) {
+    const dados = docAtualizado.data();
+    setAnotacoes(dados.anotacoes || []);
+  }
+
+  // 👇 ESSE TRECHO ESTAVA FORA, AGORA ESTÁ DENTRO DA FUNÇÃO async
+  const amanha = new Date(new Date(hoje).getTime() + 86400000)
+    .toISOString()
+    .split("T")[0];
+
+  const docAmanhaSnap = await getDoc(doc(db, "anotacoes", amanha));
+  if (!docAmanhaSnap.exists()) {
+    await setDoc(doc(db, "anotacoes", amanha), { texto: anotacaoTexto });
+    setAnotacaoAmanha(anotacaoTexto);
+  }
+
+  setAnotacaoTexto("");
+  setMenuAberto(false);
+};
 
   useEffect(() => {
     const carregarAnotacoes = async () => {
@@ -202,91 +234,118 @@ export default function App() {
       </div>
 
       {menuAberto && (
-        <div className="fixed top-0 right-0 w-80 h-full bg-white shadow-lg z-50 p-4 overflow-y-auto">
-          <h2 className="text-xl font-semibold mb-4">Anotações</h2>
+  <div className="fixed top-0 right-0 w-80 h-full bg-white shadow-lg z-50 p-4 overflow-y-auto">
+    <h2 className="text-xl font-semibold mb-4">Anotações</h2>
 
-          {anotacaoHoje && !editandoAnotacao && (
-            <div
-              onClick={() => {
-                setEditandoAnotacao(true);
-                setTextoEditado(anotacaoHoje);
-              }}
-              className="bg-green-100 p-3 rounded mb-4 cursor-pointer hover:bg-green-200 transition"
-            >
-              <strong>Anotação de hoje:</strong>
-              <p className="text-sm mt-2">{anotacaoHoje}</p>
-              <p className="text-xs text-gray-500 mt-1">(Clique para editar)</p>
+    {/* Lista de Anotações de Hoje */}
+    {anotacoes.map((anotacao) => (
+      <div key={anotacao.id} className="bg-green-100 p-3 rounded mb-4">
+        {editandoId === anotacao.id ? (
+          <>
+            <textarea
+              className="w-full border rounded p-2"
+              rows="3"
+              value={textoEditado}
+              onChange={(e) => setTextoEditado(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                onClick={async () => {
+                  const novaLista = anotacoes.map((a) =>
+                    a.id === anotacao.id ? { ...a, texto: textoEditado } : a
+                  );
+                  await setDoc(
+                    doc(db, "anotacoes", dataSelecionada),
+                    { anotacoes: novaLista },
+                    { merge: true }
+                  );
+                  setAnotacoes(novaLista);
+                  setEditandoId(null);
+                  setTextoEditado("");
+                }}
+                className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
+              >
+                Salvar
+              </button>
+              <button
+                onClick={() => {
+                  setEditandoId(null);
+                  setTextoEditado("");
+                }}
+                className="bg-gray-400 text-white px-3 py-1 rounded text-sm"
+              >
+                Cancelar
+              </button>
             </div>
-          )}
-
-          {editandoAnotacao && (
-            <div className="bg-green-100 p-3 rounded mb-4">
-              <strong>Editando anotação de hoje:</strong>
-              <textarea
-                className="w-full border rounded p-2 mt-2"
-                rows="3"
-                value={textoEditado}
-                onChange={(e) => setTextoEditado(e.target.value)}
-              />
-              <div className="flex justify-end mt-2 gap-2">
-                <button
-                  onClick={async () => {
-                    await setDoc(doc(db, "anotacoes", dataSelecionada), {
-                      texto: textoEditado,
-                    });
-                    setAnotacaoHoje(textoEditado);
-                    setEditandoAnotacao(false);
-                  }}
-                  className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
-                >
-                  Salvar edição
-                </button>
-                <button
-                  onClick={async () => {
-                    await deleteDoc(doc(db, "anotacoes", dataSelecionada));
-                    setAnotacaoHoje(null);
-                    setEditandoAnotacao(false);
-                  }}
-                  className="bg-red-500 text-white px-3 py-1 rounded text-sm"
-                >
-                  Excluir
-                </button>
-              </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm">{anotacao.texto}</p>
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                onClick={() => {
+                  setEditandoId(anotacao.id);
+                  setTextoEditado(anotacao.texto);
+                }}
+                className="bg-yellow-500 text-white px-3 py-1 rounded text-sm"
+              >
+                Editar
+              </button>
+              <button
+                onClick={async () => {
+                  const novaLista = anotacoes.filter((a) => a.id !== anotacao.id);
+                  await setDoc(
+                    doc(db, "anotacoes", dataSelecionada),
+                    { anotacoes: novaLista },
+                    { merge: true }
+                  );
+                  setAnotacoes(novaLista);
+                }}
+                className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+              >
+                Excluir
+              </button>
             </div>
-          )}
+          </>
+        )}
+      </div>
+    ))}
 
-          <textarea
-            className="w-full border rounded p-2 mb-4"
-            rows="4"
-            placeholder="Escreva nova anotação para hoje..."
-            value={anotacaoTexto}
-            onChange={(e) => setAnotacaoTexto(e.target.value)}
-          />
-          <button
-            onClick={salvarAnotacao}
-            className="bg-blue-500 text-white px-4 py-2 rounded w-full"
-          >
-            Salvar nova anotação
-          </button>
+    {/* Campo para nova anotação */}
+    <textarea
+      className="w-full border rounded p-2 mb-4"
+      rows="4"
+      placeholder="Escreva nova anotação para hoje..."
+      value={anotacaoTexto}
+      onChange={(e) => setAnotacaoTexto(e.target.value)}
+    />
+    <button
+      onClick={salvarAnotacao}
+      className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+    >
+      Salvar nova anotação
+    </button>
 
-          {anotacaoAmanha && (
-            <div className="bg-yellow-100 p-3 rounded mt-6">
-              <strong>Anotações para o próximo dia:</strong>
-              <p className="text-sm mt-2">{anotacaoAmanha}</p>
-            </div>
-          )}
+    {/* Anotação de amanhã (apenas leitura) */}
+    {anotacaoAmanha && (
+      <div className="bg-yellow-100 p-3 rounded mt-6">
+        <strong>Anotações para o próximo dia:</strong>
+        <p className="text-sm mt-2">{anotacaoAmanha}</p>
+      </div>
+    )}
 
-          <button
-            onClick={() => {
-              setMenuAberto(false);
-              setEditandoAnotacao(false);
-            }}
-            className="absolute top-2 right-2 text-gray-600 hover:text-black text-xl"
-          >
-            ×
-          </button>
-        </div>
-      )}
+    {/* Botão de fechar o menu */}
+    <button
+      onClick={() => {
+        setMenuAberto(false);
+        setEditandoId(null);
+      }}
+      className="absolute top-2 right-2 text-gray-600 hover:text-black text-xl"
+    >
+      ×
+    </button>
+  </div>
+)}
 
       {/* Navegação de datas */}
       <div className="mb-4 flex items-center gap-2">
