@@ -3,6 +3,9 @@ import "./index.css"; // Supondo que você tenha este arquivo CSS
 import { db } from "./firebase"; // Supondo que sua configuração do firebase está aqui
 import { v4 as uuidv4 } from "uuid";
 import { arrayUnion } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import Login from "./Login";
+
 import {
   collection,
   getDocs,
@@ -41,6 +44,8 @@ export default function App() {
   const [editandoId, setEditandoId] = useState(null);
   const [textoEditado, setTextoEditado] = useState("");
   // const [editandoAnotacao, setEditandoAnotacao] = useState(false); // Este estado não parecia estar em uso
+  const [usuarioLogado, setUsuarioLogado] = useState(null);
+
 
   const profissionais = [
     "Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene",
@@ -124,6 +129,17 @@ export default function App() {
     };
     fetchAgendamentos();
   }, [dataSelecionada]); // Executa sempre que 'dataSelecionada' mudar
+
+  //useEffect para carregar usuários logados
+  useEffect(() => {
+  const auth = getAuth();
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    setUsuarioLogado(user);
+  });
+
+  return () => unsubscribe();
+}, []);
+
 
   // Abre o modal de agendamento, populando com dados existentes se houver
   const abrirModal = (horario) => {
@@ -210,8 +226,21 @@ export default function App() {
     setForm(animal);
   };
 
+  if (!usuarioLogado) {
+  return <Login />;
+}
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
+      {usuarioLogado && (
+  <button
+    onClick={() => signOut(getAuth())}
+    className="bg-red-500 text-white px-3 py-1 rounded text-sm ml-4"
+  >
+    Sair
+  </button>
+)}
+
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Agenda</h1>
         <div className="relative">
