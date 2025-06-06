@@ -4,6 +4,8 @@ import { db } from "./firebase"; // Supondo que sua configuração do firebase e
 import { v4 as uuidv4 } from "uuid";
 import { arrayUnion } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+//import { onAuthStateChanged } from 'firebase/auth';
+
 import Login from "./Login";
 
 import {
@@ -94,7 +96,7 @@ export default function App() {
     }
     
     // A lógica para salvar ou definir 'anotacaoAmanha' foi removida daqui.
-    // setMenuAberto(false); // Descomente se desejar que o menu de anotações feche após salvar.
+    setMenuAberto(false); // Descomente se desejar que o menu de anotações feche após salvar.
   };
 
   // useEffect para carregar as anotações específicas do dia selecionado ('dataSelecionada')
@@ -132,13 +134,13 @@ export default function App() {
 
   //useEffect para carregar usuários logados
   useEffect(() => {
-  const auth = getAuth();
-  const unsubscribe = onAuthStateChanged(auth, (user) => {
-    setUsuarioLogado(user);
-  });
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUsuarioLogado(user);
+    });
 
-  return () => unsubscribe();
-}, []);
+    return () => unsubscribe();
+  }, []);
 
 
   // Abre o modal de agendamento, populando com dados existentes se houver
@@ -227,30 +229,36 @@ export default function App() {
   };
 
   if (!usuarioLogado) {
-  return <Login />;
-}
+    return <Login />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      {usuarioLogado && (
-  <button
-    onClick={() => signOut(getAuth())}
-    className="bg-red-500 text-white px-3 py-1 rounded text-sm ml-4"
-  >
-    Sair
-  </button>
-)}
-
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Agenda</h1>
-        <div className="relative">
-          <button
-            onClick={() => setMenuAberto(!menuAberto)}
-            className="text-3xl p-2"
-          >
-            ☰ {/* Ícone do menu hambúrguer */}
-          </button>
-          {/* Sino de notificação para 'anotacaoAmanha' foi removido daqui */}
+        <div className="flex items-center gap-4">
+          {usuarioLogado && (
+              <div className="p-1.5 bg-green-200 text-green-800 rounded-md text-sm">
+                Logado como: <strong>{usuarioLogado.email}</strong>
+              </div>
+          )}
+          {usuarioLogado && (
+            <button
+              onClick={() => signOut(getAuth())}
+              className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+            >
+              Sair
+            </button>
+          )}
+          <div className="relative">
+            <button
+              onClick={() => setMenuAberto(!menuAberto)}
+              className="text-3xl p-2"
+            >
+              ☰ {/* Ícone do menu hambúrguer */}
+            </button>
+            {/* Sino de notificação para 'anotacaoAmanha' foi removido daqui */}
+          </div>
         </div>
       </div>
 

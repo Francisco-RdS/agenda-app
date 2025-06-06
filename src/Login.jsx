@@ -17,6 +17,7 @@ export default function Login({ onLogin }) {
     } catch (error) {
       setErro("Email ou senha inválidos.");
     }
+     
   };
 
   return (
