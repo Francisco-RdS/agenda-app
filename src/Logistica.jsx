@@ -14,47 +14,53 @@ export default function Logistica({ usuario }) {
   // ======================================================= //
   // =====         useEffect SUBSTITUÍDO AQUI         =====  //
   // ======================================================= //
-  useEffect(() => {
+ // Em src/Logistica.jsx, substitua seu useEffect por este:
+// Em Logistica.jsx, esta é a versão final e correta do seu useEffect:
+useEffect(() => {
     const q = query(collection(db, 'delivery'), orderBy('dataCriacao', 'desc'));
 
+    // A mágica do onSnapshot é que ele já "ouve" as mudanças sozinho.
+    // Nós só precisamos configurar o ouvinte UMA VEZ.
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        // Analisa cada mudança individualmente
+
+        // Para cada mudança detectada desde a última vez
         snapshot.docChanges().forEach((change) => {
-            // Nós só nos importamos com documentos que foram MODIFICADOS
+            // Se um documento existente foi modificado
             if (change.type === 'modified') {
                 const docData = change.doc.data();
 
-                // Encontra o estado antigo desse delivery na nossa lista atual
-                const deliveryAntigo = deliveries.find(d => d.id === change.doc.id);
+                // Usamos uma função no setDeliveries para garantir que temos
+                // a lista mais atual para comparar, sem causar um loop.
+                setDeliveries(currentDeliveries => {
+                    const deliveryAntigo = currentDeliveries.find(d => d.id === change.doc.id);
 
-                // A CONDIÇÃO MÁGICA:
-                // O status novo é 'Concluído' E o status antigo NÃO ERA 'Concluído'?
-                if (docData.status === 'Concluído' && deliveryAntigo?.status !== 'Concluído') {
-                    
-                    // E o usuário atual é gerente ou atendente?
-                    if (['gerente', 'atendente'].includes(userRole)) {
-                        // Se tudo for verdade, disparamos a notificação!
-                        toast.success(
-                            `A tarefa de '${docData.clienteNome}' foi concluída!`,
-                            {
+                    // A CONDIÇÃO MÁGICA
+                    if (docData.status === 'Concluído' && deliveryAntigo?.status !== 'Concluído') {
+                        if (['gerente', 'atendente'].includes(userRole)) {
+                            toast.success(`A tarefa de '${docData.clienteNome}' foi concluída!`, {
                                 icon: '✅',
-                                duration: 5000, 
-                            }
-                        );
+                                duration: 5000,
+                            });
+                        }
                     }
-                }
+                    // A função do setDeliveries sempre precisa retornar o novo estado.
+                    // Aqui, simplesmente retornamos a lista que já ia ser atualizada.
+                    // Isso evita uma renderização extra.
+                    return currentDeliveries;
+                });
             }
         });
 
-        // Após checar as notificações, atualizamos a lista de tarefas na tela
+        // Atualiza a lista completa na tela para refletir todas as mudanças
         const deliveriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setDeliveries(deliveriesData);
     });
 
     return () => unsubscribe();
 
-    // Adicionamos 'deliveries' e 'userRole' como dependências para a lógica funcionar corretamente
-  }, [deliveries, userRole]); 
+// Apenas 'userRole' como dependência. O useEffect só vai rodar de novo
+// se o perfil do usuário mudar, o que é o comportamento correto.
+}, [userRole]);
   // ======================================================= //
   // ===== FIM DA SEÇÃO SUBSTITUÍDA                      ===== //
   // ======================================================= //
