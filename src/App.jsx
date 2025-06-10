@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from "react";
-import "./index.css"; // Supondo que você tenha este arquivo CSS
-import { db } from "./firebase"; // Supondo que sua configuração do firebase está aqui
+import React, { useEffect, useState, useRef } from "react";
+import "./index.css";
+import { db } from "./firebase";
 import { v4 as uuidv4 } from "uuid";
-import { arrayUnion } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import Logistica from './Logistica';
 import Login from "./Login";
-import { Toaster } from 'react-hot-toast'; // <-- ADICIONE ESTA LINHA
+import { Toaster, toast } from 'react-hot-toast';
+
+// Importação ÚNICA e CORRIGIDA de tudo que precisamos do Firestore
 import {
     collection,
+    query,
+    onSnapshot,
+    orderBy,
     getDocs,
     setDoc,
     doc,
     deleteDoc,
     getDoc,
+    arrayUnion
 } from "firebase/firestore";
 
 // Gera a lista de horários disponíveis
@@ -43,19 +48,41 @@ export default function App() {
     const [textoEditado, setTextoEditado] = useState("");
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [view, setView] = useState('agenda');
+    const [deliveries, setDeliveries] = useState([]);
+    const prevDeliveriesRef = useRef();
 
-    const profissionais = [
-        "Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene",
-        "Francisco", "Raimundo", "Vera",
-    ];
-    const servicosDisponiveis = [
-        "Banho", "Tosa", "Tosa Higienica", "Hidratação", "Remoção",
-    ];
-    const cores = [
-        "#e63946", "#457b9d", "#2a9d8f", "#f4a261", "#b5838d",
-        "#6d6875", "#118ab2", "#06d6a0", "#ef476f",
-    ];
+    useEffect(() => {
+        prevDeliveriesRef.current = deliveries;
+    });
 
+    useEffect(() => {
+        if (!usuarioLogado) return;
+        const userRole = usuarioLogado.claims.role;
+        const q = query(collection(db, 'delivery'), orderBy('dataCriacao', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const newDeliveries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const oldDeliveries = prevDeliveriesRef.current || [];
+            newDeliveries.forEach(newDelivery => {
+                const oldDelivery = oldDeliveries.find(d => d.id === newDelivery.id);
+                if (!oldDelivery || (oldDelivery.status !== 'Concluído' && newDelivery.status === 'Concluído')) {
+                    if (newDelivery.status === 'Concluído') {
+                        if (['gerente', 'atendente'].includes(userRole)) {
+                            toast.success(`A tarefa de '${newDelivery.clienteNome}' foi concluída!`, {
+                                icon: '✅',
+                                duration: 5000,
+                            });
+                        }
+                    }
+                }
+            });
+            setDeliveries(newDeliveries);
+        });
+        return () => unsubscribe();
+    }, [usuarioLogado]);
+
+    const profissionais = ["Silvia", "Taty", "Italo", "Marcelo", "Marcos", "Eliene", "Francisco", "Raimundo", "Vera"];
+    const servicosDisponiveis = ["Banho", "Tosa", "Tosa Higienica", "Hidratação", "Remoção"];
+    const cores = ["#e63946", "#457b9d", "#2a9d8f", "#f4a261", "#b5838d", "#6d6875", "#118ab2", "#06d6a0", "#ef476f"];
     const colorByIndex = (i) => cores[i % cores.length];
 
     const salvarAnotacao = async () => {
@@ -157,7 +184,7 @@ export default function App() {
         const ref = doc(db, "agendamentos", dataSelecionada, "horarios", horario);
         const snap = await getDoc(ref);
         if (!snap.exists() || animalSelecionadoIndex === null) return fecharModal();
-        const existentes = snap.data().animais || [];
+        let existentes = snap.data().animais || [];
         existentes.splice(animalSelecionadoIndex, 1);
         if (existentes.length === 0) {
             await deleteDoc(ref);
@@ -192,10 +219,7 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-gray-100 p-4">
-              <Toaster // <-- ADICIONE ESTAS LINHAS AQUI
-            position="top-right" // As notificações aparecerão no canto superior direito
-            reverseOrder={false} // Novas notificações aparecem embaixo das antigas
-        />
+            <Toaster position="top-right" reverseOrder={false} />
             <nav className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-white p-3 rounded-lg shadow-md mb-4">
                 <div>
                     {usuarioLogado && !['motorista'].includes(usuarioLogado?.claims?.role) && (
@@ -337,7 +361,7 @@ export default function App() {
                     )}
                 </>
             ) : (
-                <Logistica usuario={usuarioLogado} />
+                <Logistica usuario={usuarioLogado} deliveries={deliveries} />
             )}
         </div>
     );

@@ -5,8 +5,8 @@ import { collection, query, onSnapshot, orderBy, addDoc, doc, updateDoc, deleteD
 import ModalDelivery from './ModalDelivery';
 import DeliveryCard from './DeliveryCard';
 
-export default function Logistica({ usuario }) {
-  const [deliveries, setDeliveries] = useState([]);
+export default function Logistica({ usuario, deliveries }) {
+
   const [showModal, setShowModal] = useState(false);
   const [deliverySendoEditado, setDeliverySendoEditado] = useState(null);
   const userRole = usuario.claims.role;
@@ -16,51 +16,7 @@ export default function Logistica({ usuario }) {
   // ======================================================= //
  // Em src/Logistica.jsx, substitua seu useEffect por este:
 // Em Logistica.jsx, esta é a versão final e correta do seu useEffect:
-useEffect(() => {
-    const q = query(collection(db, 'delivery'), orderBy('dataCriacao', 'desc'));
 
-    // A mágica do onSnapshot é que ele já "ouve" as mudanças sozinho.
-    // Nós só precisamos configurar o ouvinte UMA VEZ.
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-
-        // Para cada mudança detectada desde a última vez
-        snapshot.docChanges().forEach((change) => {
-            // Se um documento existente foi modificado
-            if (change.type === 'modified') {
-                const docData = change.doc.data();
-
-                // Usamos uma função no setDeliveries para garantir que temos
-                // a lista mais atual para comparar, sem causar um loop.
-                setDeliveries(currentDeliveries => {
-                    const deliveryAntigo = currentDeliveries.find(d => d.id === change.doc.id);
-
-                    // A CONDIÇÃO MÁGICA
-                    if (docData.status === 'Concluído' && deliveryAntigo?.status !== 'Concluído') {
-                        if (['gerente', 'atendente'].includes(userRole)) {
-                            toast.success(`A tarefa de '${docData.clienteNome}' foi concluída!`, {
-                                icon: '✅',
-                                duration: 5000,
-                            });
-                        }
-                    }
-                    // A função do setDeliveries sempre precisa retornar o novo estado.
-                    // Aqui, simplesmente retornamos a lista que já ia ser atualizada.
-                    // Isso evita uma renderização extra.
-                    return currentDeliveries;
-                });
-            }
-        });
-
-        // Atualiza a lista completa na tela para refletir todas as mudanças
-        const deliveriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setDeliveries(deliveriesData);
-    });
-
-    return () => unsubscribe();
-
-// Apenas 'userRole' como dependência. O useEffect só vai rodar de novo
-// se o perfil do usuário mudar, o que é o comportamento correto.
-}, [userRole]);
   // ======================================================= //
   // ===== FIM DA SEÇÃO SUBSTITUÍDA                      ===== //
   // ======================================================= //
