@@ -6,6 +6,7 @@ import { arrayUnion } from "firebase/firestore";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import Logistica from './Logistica';
 import Login from "./Login";
+import { Toaster } from 'react-hot-toast'; // <-- ADICIONE ESTA LINHA
 import {
     collection,
     getDocs,
@@ -191,6 +192,10 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-gray-100 p-4">
+              <Toaster // <-- ADICIONE ESTAS LINHAS AQUI
+            position="top-right" // As notificações aparecerão no canto superior direito
+            reverseOrder={false} // Novas notificações aparecem embaixo das antigas
+        />
             <nav className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-white p-3 rounded-lg shadow-md mb-4">
                 <div>
                     {usuarioLogado && !['motorista'].includes(usuarioLogado?.claims?.role) && (

@@ -1,6 +1,5 @@
-// src/Logistica.jsx
-
 import React, { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 import { db } from './firebase';
 import { collection, query, onSnapshot, orderBy, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import ModalDelivery from './ModalDelivery';
@@ -12,23 +11,54 @@ export default function Logistica({ usuario }) {
   const [deliverySendoEditado, setDeliverySendoEditado] = useState(null);
   const userRole = usuario.claims.role;
 
-  // Efeito para buscar os deliveries do Firestore em tempo real
+  // ======================================================= //
+  // =====         useEffect SUBSTITUÍDO AQUI         =====  //
+  // ======================================================= //
   useEffect(() => {
-    // Usamos 'delivery' como o nome da coleção, como combinamos
     const q = query(collection(db, 'delivery'), orderBy('dataCriacao', 'desc'));
-    
-    // onSnapshot "ouve" as mudanças no banco de dados e atualiza a tela
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const deliveriesData = [];
-      querySnapshot.forEach((doc) => {
-        deliveriesData.push({ id: doc.id, ...doc.data() });
-      });
-      setDeliveries(deliveriesData);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        // Analisa cada mudança individualmente
+        snapshot.docChanges().forEach((change) => {
+            // Nós só nos importamos com documentos que foram MODIFICADOS
+            if (change.type === 'modified') {
+                const docData = change.doc.data();
+
+                // Encontra o estado antigo desse delivery na nossa lista atual
+                const deliveryAntigo = deliveries.find(d => d.id === change.doc.id);
+
+                // A CONDIÇÃO MÁGICA:
+                // O status novo é 'Concluído' E o status antigo NÃO ERA 'Concluído'?
+                if (docData.status === 'Concluído' && deliveryAntigo?.status !== 'Concluído') {
+                    
+                    // E o usuário atual é gerente ou atendente?
+                    if (['gerente', 'atendente'].includes(userRole)) {
+                        // Se tudo for verdade, disparamos a notificação!
+                        toast.success(
+                            `A tarefa de '${docData.clienteNome}' foi concluída!`,
+                            {
+                                icon: '✅',
+                                duration: 5000, 
+                            }
+                        );
+                    }
+                }
+            }
+        });
+
+        // Após checar as notificações, atualizamos a lista de tarefas na tela
+        const deliveriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setDeliveries(deliveriesData);
     });
 
-    // Limpa o "ouvinte" quando o componente é desmontado para evitar vazamento de memória
     return () => unsubscribe();
-  }, []);
+
+    // Adicionamos 'deliveries' e 'userRole' como dependências para a lógica funcionar corretamente
+  }, [deliveries, userRole]); 
+  // ======================================================= //
+  // ===== FIM DA SEÇÃO SUBSTITUÍDA                      ===== //
+  // ======================================================= //
+
 
   const handleCloseModal = () => {
     setShowModal(false);
@@ -61,9 +91,6 @@ export default function Logistica({ usuario }) {
     }
   };
 
-  // ======================================================= //
-  // ===== 1. NOVA FUNÇÃO ADICIONADA AQUI =====              //
-  // ======================================================= //
   const handleStatusChange = async (deliveryId, novoStatus) => {
     // Cria uma referência para o documento específico que queremos alterar
     const deliveryRef = doc(db, 'delivery', deliveryId);
@@ -103,9 +130,6 @@ export default function Logistica({ usuario }) {
             userRole={userRole}
             onEdit={() => handleOpenModalParaEditar(delivery)}
             onDelete={() => handleDelete(delivery.id)}
-            // ======================================================= //
-            // ===== 2. NOVA PROP SENDO PASSADA AQUI =====             //
-            // ======================================================= //
             onStatusChange={handleStatusChange} 
           />
         ))}
