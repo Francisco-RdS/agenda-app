@@ -1,0 +1,29 @@
+# Nome do nosso fluxo de automação
+name: Deploy to Firebase
+
+# Define o gatilho: este fluxo roda toda vez que você faz 'git push'
+on:
+  push:
+    branches:
+      # IMPORTANTE: Se o nome da sua branch principal for 'master', troque 'main' por 'master'
+      - main 
+
+jobs:
+  deploy:
+    name: Deploy to Firebase
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Baixa o seu código do GitHub para o ambiente do robô
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      # 2. Faz o deploy no Firebase usando uma Ação pronta da comunidade
+      # Ela cuida de instalar as ferramentas e rodar o comando para nós
+      - name: Deploy to Firebase
+        uses: w9jds/firebase-action@master
+        with:
+          action: deploy
+          args: --only functions # Publica apenas as Cloud Functions
+        env:
+          # Usa o segredo que guardamos no GitHub
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

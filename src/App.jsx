@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
 import "./index.css";
-import { db } from "./firebase";
+// 1. A importação do 'auth' agora vem exclusivamente do nosso arquivo centralizado
+import { db, auth } from "./firebase"; 
 import { v4 as uuidv4 } from "uuid";
-import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+// 2. A importação direta do 'firebase/auth' agora só traz o que precisamos
+import { onAuthStateChanged, signOut } from "firebase/auth"; 
 import Logistica from './Logistica';
 import Login from "./Login";
+import GerenciadorDeUsuarios from './GerenciadorDeUsuarios';
 import { Toaster, toast } from 'react-hot-toast';
 
-// Importação ÚNICA e CORRIGIDA de tudo que precisamos do Firestore
 import {
     collection,
     query,
@@ -21,7 +23,6 @@ import {
     arrayUnion
 } from "firebase/firestore";
 
-// Gera a lista de horários disponíveis
 const horarios = Array.from({ length: 19 }, (_, i) => {
     const hora = 8 + Math.floor(i / 2);
     const minuto = i % 2 === 0 ? "00" : "30";
@@ -64,14 +65,12 @@ export default function App() {
             const oldDeliveries = prevDeliveriesRef.current || [];
             newDeliveries.forEach(newDelivery => {
                 const oldDelivery = oldDeliveries.find(d => d.id === newDelivery.id);
-                if (!oldDelivery || (oldDelivery.status !== 'Concluído' && newDelivery.status === 'Concluído')) {
-                    if (newDelivery.status === 'Concluído') {
-                        if (['gerente', 'atendente'].includes(userRole)) {
-                            toast.success(`A tarefa de '${newDelivery.clienteNome}' foi concluída!`, {
-                                icon: '✅',
-                                duration: 5000,
-                            });
-                        }
+                if (oldDelivery && oldDelivery.status !== 'Concluído' && newDelivery.status === 'Concluído') {
+                    if (['gerente', 'atendente'].includes(userRole)) {
+                        toast.success(`A tarefa de '${newDelivery.clienteNome}' foi concluída!`, {
+                            icon: '✅',
+                            duration: 5000,
+                        });
                     }
                 }
             });
@@ -126,25 +125,24 @@ export default function App() {
         fetchAgendamentos();
     }, [dataSelecionada]);
 
+    // useEffect para verificar o estado de autenticação do usuário
     useEffect(() => {
-        const auth = getAuth();
+        // A linha 'const auth = getAuth();' FOI REMOVIDA DAQUI.
+        // Agora ele usa a variável 'auth' que foi importada no topo do arquivo.
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const idTokenResult = await user.getIdTokenResult(true);
                 user.claims = idTokenResult.claims;
                 setUsuarioLogado(user);
+                if (idTokenResult.claims.role === 'motorista') {
+                    setView('logistica');
+                }
             } else {
                 setUsuarioLogado(null);
             }
         });
         return () => unsubscribe();
     }, []);
-
-    useEffect(() => {
-        if (usuarioLogado && usuarioLogado.claims.role === 'motorista') {
-            setView('logistica');
-        }
-    }, [usuarioLogado]);
 
     const abrirModal = (horario) => {
         const animaisNoHorario = agendamentos[horario]?.animais || [];
@@ -222,28 +220,32 @@ export default function App() {
             <Toaster position="top-right" reverseOrder={false} />
             <nav className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-white p-3 rounded-lg shadow-md mb-4">
                 <div>
-                    {usuarioLogado && !['motorista'].includes(usuarioLogado?.claims?.role) && (
+                    {usuarioLogado.claims.role !== 'motorista' && (
                         <button onClick={() => setView('agenda')} className={`px-4 py-2 rounded-md font-semibold ${view === 'agenda' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
                             🗓️ Agenda
                         </button>
                     )}
-                    <button onClick={() => setView('logistica')} className={`${usuarioLogado && !['motorista'].includes(usuarioLogado?.claims?.role) ? 'ml-2' : ''} px-4 py-2 rounded-md font-semibold ${view === 'logistica' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
+                    <button onClick={() => setView('logistica')} className={`${usuarioLogado.claims.role !== 'motorista' ? 'ml-2' : ''} px-4 py-2 rounded-md font-semibold ${view === 'logistica' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
                         🚚 Logística
                     </button>
+                    {usuarioLogado.claims.role === 'gerente' && (
+                        <button onClick={() => setView('usuarios')} className={`ml-2 px-4 py-2 rounded-md font-semibold ${view === 'usuarios' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
+                            👥 Usuários
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-4">
-                    {usuarioLogado && (
-                        <div className="p-1.5 bg-green-200 text-green-800 rounded-md text-sm">
-                            Logado como: <strong>{usuarioLogado.email}</strong> ({usuarioLogado?.claims?.role})
-                        </div>
-                    )}
-                    <button onClick={() => signOut(getAuth())} className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600">
+                    <div className="p-1.5 bg-green-200 text-green-800 rounded-md text-sm">
+                        Logado como: <strong>{usuarioLogado.email}</strong> ({usuarioLogado.claims.role})
+                    </div>
+                    {/* O botão de Sair agora usa a variável 'auth' importada */}
+                    <button onClick={() => signOut(auth)} className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600">
                         Sair
                     </button>
                 </div>
             </nav>
 
-            {view === 'agenda' ? (
+            {view === 'agenda' && (
                 <>
                     <div className="flex justify-between items-center mb-4">
                         <h1 className="text-2xl font-bold">Agenda</h1>
@@ -253,7 +255,6 @@ export default function App() {
                             </button>
                         </div>
                     </div>
-
                     {menuAberto && (
                         <div className="fixed top-0 right-0 w-80 h-full bg-white shadow-lg z-50 p-4 overflow-y-auto">
                             <h2 className="text-xl font-semibold mb-4">Anotações para {new Date(dataSelecionada + 'T00:00:00').toLocaleDateString('pt-BR')}</h2>
@@ -293,7 +294,6 @@ export default function App() {
                             <button onClick={() => { setMenuAberto(false); setEditandoId(null); setTextoEditado(""); }} className="absolute top-2 right-2 text-gray-600 hover:text-black text-xl">×</button>
                         </div>
                     )}
-
                     <div className="mb-4 flex flex-col sm:flex-row items-center gap-2">
                         <button onClick={() => setDataSelecionada(new Date(new Date(dataSelecionada).getTime() - 86400000).toISOString().split("T")[0])} className="px-2 py-1 bg-gray-200 rounded">
                             ◀ Dia anterior
@@ -303,7 +303,6 @@ export default function App() {
                             Próximo dia ▶
                         </button>
                     </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                         {horarios.map((hora) => (
                             <div key={hora} onClick={() => abrirModal(hora)} className={`p-4 rounded-lg shadow cursor-pointer ${agendamentos[hora] ? "bg-green-300" : "bg-white"}`}>
@@ -320,7 +319,6 @@ export default function App() {
                             </div>
                         ))}
                     </div>
-
                     {modalInfo.visible && (
                         <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
                             <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md mx-4">
@@ -360,8 +358,14 @@ export default function App() {
                         </div>
                     )}
                 </>
-            ) : (
+            )}
+
+            {view === 'logistica' && (
                 <Logistica usuario={usuarioLogado} deliveries={deliveries} />
+            )}
+
+            {view === 'usuarios' && (
+                <GerenciadorDeUsuarios />
             )}
         </div>
     );

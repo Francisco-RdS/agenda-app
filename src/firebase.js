@@ -1,9 +1,11 @@
-// firebase.js
+// src/firebase.js
+
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions"; // A importação foi limpa
 
-// Configuração do Firebase do seu projeto
+// Sua configuração do Firebase (mantida exatamente como estava)
 const firebaseConfig = {
   apiKey: "AIzaSyB_MOuQg-m_nVDDEr0-BvFLQt1C1W5IrJM",
   authDomain: "agenda-web-10929.firebaseapp.com",
@@ -14,10 +16,15 @@ const firebaseConfig = {
   measurementId: "G-PP4ZTTSCHK",
 };
 
-// Inicializa o app Firebase
+// Inicializa o Firebase App
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
 
-// ✅ Exportação correta (uma vez só)
-export { db, auth };
+// Inicializa todos os serviços que vamos usar e os exporta
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// A região precisa ser a mesma onde suas funções foram publicadas ('us-central1')
+const functions = getFunctions(app, 'us-central1');
+
+// Exportamos tudo para ser usado em outros lugares do app
+export { db, auth, functions };

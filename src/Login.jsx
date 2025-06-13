@@ -2,22 +2,31 @@
 import React from 'react';
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "./firebase"; // ajuste o caminho se necessário
+import { auth } from "./firebase"; 
 
-export default function Login({ onLogin }) {
+export default function Login() { // Removida a prop onLogin, pois não estava sendo usada no App.jsx
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // Adicionado para feedback visual
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setErro(""); // Limpa erros antigos
+
     try {
       await signInWithEmailAndPassword(auth, email, senha);
-      onLogin(); // avisa o App que o login foi feito
+      // Não precisamos mais do onLogin(), pois o App.jsx já detecta a mudança com onAuthStateChanged
     } catch (error) {
-      setErro("Email ou senha inválidos.");
+      // ===== AQUI ESTÁ A MUDANÇA IMPORTANTE =====
+      // Mostramos o erro detalhado no console para depuração
+      console.error("ERRO DETALHADO NO LOGIN:", error); 
+      // Mostramos uma mensagem mais útil para o usuário
+      setErro(`Erro: ${error.code}`); 
+    } finally {
+        setIsLoading(false);
     }
-     
   };
 
   return (
@@ -41,9 +50,10 @@ export default function Login({ onLogin }) {
         />
         <button
           type="submit"
-          className="w-full bg-blue-500 text-white py-2 rounded"
+          className="w-full bg-blue-500 text-white py-2 rounded disabled:bg-gray-400"
+          disabled={isLoading}
         >
-          Entrar
+          {isLoading ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
     </div>
